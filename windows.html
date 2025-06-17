@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build LLVM/Zig on Windows</title>
+<style>
+#ConfigurationDiv {
+   margin-bottom: 40px;
+}
+.CommandSection {
+  /*background-color: #0d1117;*/
+  border-top: 1px solid #e4e4e4;
+  padding: 10px;
+}
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #1a1a1a;
+    color: #e4e4e4;
+}
+</style><script>
+
+function get(id) { return document.getElementById(id); }
+function get_msvc_runtime_library(build_type) {
+  // we make sure to specify the static version of the ucrt library because msvcup doesn't
+  // try to install the debug dll system-wide by adding its directory the PATH
+  if (build_type == "Release") return "MultiThreaded";
+  if (build_type == "Debug") return "MultiThreadedDebug";
+  error = "unknown build type: " + build_type;
+  alert(error)
+  throw error;
+}
+function update() {
+  const config_dom = get('ConfigurationDiv')
+  const build_type_llvm = config_dom.querySelector('input[name="BuildTypeLlvm"]:checked').value;
+  const build_type_zig = config_dom.querySelector('input[name="BuildTypeZig"]:checked').value;
+  const host_cpu = config_dom.querySelector('input[name="HostCpu"]:checked').value;
+  const target_cpu = config_dom.querySelector('input[name="TargetCpu"]:checked').value;
+  var root_dir = get("RootDirInput").value;
+
+  const cmake_host_arch = cmake_cpu_arch_map[host_cpu];
+  const cmake_version = "4.0.3";
+  const cmake_vname = 'cmake-' + cmake_version + "-windows-" + cmake_host_arch;
+
+  var msvc_runtime_library_llvm = get_msvc_runtime_library(build_type_llvm);
+  var msvc_runtime_library_zig = get_msvc_runtime_library(build_type_zig);
+
+  get('ZigCmakeDiv').innerHTML = generateHtmlZigCmakeArgs(target_cpu, root_dir, cmake_vname, msvc_runtime_library_zig);
+  get('LlvmInstructionsDiv').innerHTML = generateHtmlLlvm(build_type_llvm, host_cpu, target_cpu, root_dir, cmake_version, cmake_vname, msvc_runtime_library_llvm);
+}
+function bodyonload() {
+ update();
+}
+
+const MSVC_VERSION = "14.44.17.14";
+const SDK_VERSION = "10.0.22621.7";
+
+const msvcup_cpu_arch_map = {
+    'x64': 'x86_64',
+    'arm64': 'aarch64',
+    'x86': 'x86',
+    'arm': 'arm',
+};
+const cmake_cpu_arch_map = {
+    'x64': 'x86_64',
+    'arm64': 'arm64',
+    'x86': 'i386',
+    'arm': 'arm',
+};
+
+function generateHtmlZigCmakeArgs(target_cpu, root_dir, cmake_vname, msvc_runtime_library) {
+  const zig_arch = msvcup_cpu_arch_map[target_cpu];
+  var html = '';
+  html += generateHtmlCommand(root_dir + '\\' + cmake_vname + '\\bin\\cmake -DCMAKE_TOOLCHAIN_FILE=' + root_dir + '\\autoenv-' + target_cpu + '\\toolchain.cmake -DCMAKE_MSVC_RUNTIME_LIBRARY=' + msvc_runtime_library + ' -DCMAKE_PREFIX_PATH=' + root_dir + '\\install-release -GNinja -DCMAKE_MAKE_PROGRAM=' + root_dir + '\\ninja.exe "-DZIG_EXTRA_BUILD_ARGS=--libc;' + root_dir + '\\autoenv-' + target_cpu + '\\libc.txt" -DZIG_TARGET_TRIPLE=' + zig_arch + '-windows-msvc');
+  return html;
+}
+
+function generateHtmlLlvm(build_type, host_cpu, target_cpu, root_dir, cmake_version, cmake_vname, msvc_runtime_library) {
+  const msvcup_host_arch = msvcup_cpu_arch_map[host_cpu];
+  const build_type_lower = build_type.toLowerCase();
+
+  var html = '';
+
+  html += generateHtmlCommand("mkdir " + root_dir);
+
+  html += generateHtmlCommandSectionStart('Install msvcup (MSVC Build Tools Installer)');
+  html += generateHtmlCommand('curl -L -o ' + root_dir + '\\msvcup.zip https://github.com/marler8997/msvcup/releases/download/v2025_06_18/msvcup-' + msvcup_host_arch + '-windows.zip');
+  html += generateHtmlCommand('tar xf ' + root_dir + '\\msvcup.zip -C ' + root_dir);
+  html += generateHtmlCommand('del ' + root_dir + '\\msvcup.zip');
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Install MSVC')
+  html += generateHtmlCommand(root_dir + '\\msvcup.exe install msvc-' + MSVC_VERSION + ' sdk-' + SDK_VERSION + ' --lock-file ' + root_dir + '\\msvcup.lock --manifest-update-off');
+  html += generateHtmlCommand(root_dir + '\\msvcup.exe autoenv --target-cpu ' + target_cpu + ' --out-dir ' + root_dir + '\\autoenv-' + target_cpu + ' msvc-' + MSVC_VERSION + ' sdk-' + SDK_VERSION);
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Install Cmake')
+  html += generateHtmlCommand('curl -L -o ' + root_dir + '\\cmake.zip https://github.com/Kitware/CMake/releases/download/v' + cmake_version + '/' + cmake_vname + '.zip');
+  html += generateHtmlCommand('tar xf ' + root_dir + '\\cmake.zip -C ' + root_dir);
+  html += generateHtmlCommand('del ' + root_dir + '\\cmake.zip');
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Install Ninja')
+  html += generateHtmlCommand('curl -L -o ' + root_dir + '\\ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip');
+  html += generateHtmlCommand('tar xf ' + root_dir + '\\ninja.zip -C ' + root_dir);
+  html += generateHtmlCommand('del ' + root_dir + '\\ninja.zip');
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Download LLVM Project')
+  html += generateHtmlCommand('git clone --depth 1 --branch llvmorg-20.1.7 https://github.com/llvm/llvm-project.git ' + root_dir + '\\src')
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Build LLVM')
+  html += generateHtmlCommand(getCommonCmake(build_type, target_cpu, root_dir, cmake_vname, msvc_runtime_library, 'llvm') + ' -DLLVM_ENABLE_ZLIB=OFF')
+  html += generateHtmlCommand(root_dir + '\\ninja -C' + root_dir + '\\out-llvm-' + build_type_lower + ' install')
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Build LLD')
+  html += generateHtmlCommand(getCommonCmake(build_type, target_cpu, root_dir, cmake_vname, msvc_runtime_library, 'lld'))
+  html += generateHtmlCommand(root_dir + '\\ninja -C' + root_dir + '\\out-lld-' + build_type_lower + ' install')
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Build Clang')
+  html += generateHtmlCommand(getCommonCmake(build_type, target_cpu, root_dir, cmake_vname, msvc_runtime_library, 'clang') + ' -DLLVM_INCLUDE_TESTS=OFF')
+  html += generateHtmlCommand(root_dir + '\\ninja -C' + root_dir + '\\out-clang-' + build_type_lower + ' install')
+  html += generateHtmlCommandSectionEnd();
+
+  return html;
+}
+function generateHtmlCommandSectionStart(title) {
+  return '<div class="CommandSection">\n<div class="CommandTitle">' + title + '</div>\n';
+}
+function generateHtmlCommandSectionEnd(command) {
+  return '</div>\n';
+}
+function generateHtmlCommand(command) {
+  return '<div><button onclick="copyCommand(this)">copy</button> <code>' + command + '</code></div>';
+}
+
+function getCommonCmake(build_type, target_cpu, root_dir, cmake_vname, msvc_runtime_library, name) {
+  const build_type_lower = build_type.toLowerCase();
+  return root_dir + '\\' + cmake_vname + '\\bin\\cmake -DCMAKE_TOOLCHAIN_FILE=' + root_dir + '\\autoenv-' + target_cpu + '\\toolchain.cmake -DCMAKE_MSVC_RUNTIME_LIBRARY=' + msvc_runtime_library + ' -DCMAKE_BUILD_TYPE=' + build_type + ' -GNinja -DCMAKE_MAKE_PROGRAM=' + root_dir + '\\ninja.exe -DCMAKE_INSTALL_PREFIX=' + root_dir + '\\install-' + build_type_lower + ' -S ' + root_dir + '\\src\\' + name + ' -B ' + root_dir + '\\out-' + name + '-' + build_type_lower;
+}
+
+function copyCommand(button) {
+  navigator.clipboard.writeText(button.nextElementSibling.innerHTML);
+}
+
+</script>
+</head><body onload="bodyonload()">
+
+<h1>Build LLVM/Zig on Windows from Scratch</h1>
+
+These are commands to build LLVM/Zig from any windows machine from scratch (no pre-requisites).
+
+<h2>Configuration:</h2>
+<div id="ConfigurationDiv">
+  <div>
+    <span>Build Type LLVM:</span>
+      <label><input type="radio" name="BuildTypeLlvm" value="Release" onchange="update()" checked> Release</label>
+      <label><input type="radio" name="BuildTypeLlvm" value="Debug" onchange="update()"> Debug</label>
+  </div>
+  <div>
+    <span>Build Type Zig:</span>
+      <label><input type="radio" name="BuildTypeZig" value="Release" onchange="update()" checked> Release</label>
+      <label><input type="radio" name="BuildTypeZig" value="Debug" onchange="update()"> Debug</label>
+  </div>
+  <div>
+    <span>Host CPU:</span>
+    <label><input type="radio" name="HostCpu" value="x64" onchange="update()" checked> x64</label>
+      <label><input type="radio" name="HostCpu" value="arm64" onchange="update()"> arm64</label>
+      <!--<label><input type="radio" name="HostCpu" value="x86" onchange="update()"> x86</label>-->
+      <!--<label><input type="radio" name="HostCpu" value="arm" onchange="update()"> arm</label>-->
+  </div>
+  <div>
+    <span>Target CPU:</span>
+    <label><input type="radio" name="TargetCpu" value="x64" onchange="update()" checked> x64</label>
+    <label><input type="radio" name="TargetCpu" value="arm64" onchange="update()"> arm64</label>
+    <label><input type="radio" name="TargetCpu" value="x86" onchange="update()"> x86</label>
+    <label><input type="radio" name="TargetCpu" value="arm" onchange="update()"> arm</label>
+  </div>
+  <div>
+    <label>LLVM Directory: <input id="RootDirInput" type="text" value="C:\llvm20" oninput="update()" /></label>
+  </div>
+</div>
+
+<h2>Zig CMAKE</h2>
+
+After you've built LLVM with the instructions below, here are your cmake arguments to build Zig with it:
+
+<div id="ZigCmakeDiv"></div>
+
+<h2>Build LLVM (with lld and clang)</h2>
+<div id="LlvmInstructionsDiv"></div>
+</body>
+</html>
