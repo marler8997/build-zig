@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build LLVM/Zig on Linux</title>
+<style>
+#ConfigurationDiv {
+   margin-bottom: 40px;
+}
+.CommandSection {
+  /*background-color: #0d1117;*/
+  border-top: 1px solid #e4e4e4;
+  padding: 10px;
+}
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #1a1a1a;
+    color: #e4e4e4;
+}
+</style><script>
+
+function get(id) { return document.getElementById(id); }
+
+const default_llvm_dir_19 = "~/llvm19";
+const default_llvm_dir_20 = "~/llvm20";
+
+function update() {
+  const config_dom = get('ConfigurationDiv')
+  const build_type_llvm = config_dom.querySelector('input[name="BuildTypeLlvm"]:checked').value;
+  const llvm_version = config_dom.querySelector('input[name="LlvmVersion"]:checked').value;
+  const build_type_zig = config_dom.querySelector('input[name="BuildTypeZig"]:checked').value;
+  const root_dir_input = get("RootDirInput");
+  if (root_dir_input.value == default_llvm_dir_19) {
+    if (llvm_version == "20") {
+      root_dir_input.value = default_llvm_dir_20;
+    }
+  } else if (root_dir_input.value == default_llvm_dir_20) {
+    if (llvm_version == "19") {
+      root_dir_input.value = default_llvm_dir_19;
+    }
+  }
+  const root_dir = root_dir_input.value;
+  var llvm_version_git;
+  if (llvm_version == "19") {
+    llvm_version_git = "19.1.0";
+  } else if (llvm_version == "20") {
+    llvm_version_git = "20.1.7";
+  } else throw "unhandled llvm version " + llvm_version;
+  
+
+  get('ZigCmakeDiv').innerHTML = generateHtmlZigCmakeArgs(root_dir);
+  get('LlvmInstructionsDiv').innerHTML = generateHtmlLlvm(build_type_llvm, root_dir, llvm_version_git);
+}
+function bodyonload() {
+ get("RootDirInput").value = default_llvm_dir_20;
+ update();
+}
+
+function generateHtmlZigCmakeArgs(root_dir) {
+  var html = '';
+  html += generateHtmlCommand('cmake -DCMAKE_PREFIX_PATH=' + root_dir + '/install-release -GNinja');
+  return html;
+}
+
+function generateHtmlLlvm(build_type, root_dir, llvm_version_git) {
+  const build_type_lower = build_type.toLowerCase();
+
+  var html = '';
+  html += "<div>Install build-essential, cmake and ninja-build</div>"
+
+  html += generateHtmlCommand("mkdir -p " + root_dir);
+
+  html += generateHtmlCommandSectionStart('Download LLVM Project')
+  html += generateHtmlCommand('git clone --depth 1 --branch llvmorg-' + llvm_version_git + ' https://github.com/llvm/llvm-project.git ' + root_dir + '/src')
+  html += generateHtmlCommandSectionEnd();
+
+  html += generateHtmlCommandSectionStart('Build LLVM/LLD/Clang')
+  html += generateHtmlCommand('cmake -DCMAKE_BUILD_TYPE=' + build_type + ' -GNinja -DCMAKE_INSTALL_PREFIX=' + root_dir + '/install-' + build_type_lower + ' -S ' + root_dir + '/src/llvm -B ' + root_dir + '/out-' + build_type_lower + ' -DLLVM_ENABLE_PROJECTS="lld;clang" -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_PARALLEL_LINK_JOBS=1')
+  html += generateHtmlCommand('ninja -C ' + root_dir + '/out-' + build_type_lower + ' install')
+  html += generateHtmlCommandSectionEnd();
+
+  return html;
+}
+function generateHtmlCommandSectionStart(title) {
+  return '<div class="CommandSection">\n<div class="CommandTitle">' + title + '</div>\n';
+}
+function generateHtmlCommandSectionEnd(command) {
+  return '</div>\n';
+}
+function generateHtmlCommand(command) {
+  return '<div><button onclick="copyCommand(this)">copy</button> <code>' + command + '</code></div>';
+}
+
+function copyCommand(button) {
+  navigator.clipboard.writeText(button.nextElementSibling.innerHTML);
+}
+
+</script>
+</head><body onload="bodyonload()">
+
+<h1>Build LLVM/Zig on Linux</h1>
+
+These are commands to build LLVM/Zig on linux.
+
+<h2>Configuration:</h2>
+<div id="ConfigurationDiv">
+  <div>
+    <span>Build Type LLVM:</span>
+      <label><input type="radio" name="BuildTypeLlvm" value="Release" onchange="update()" checked> Release</label>
+      <label><input type="radio" name="BuildTypeLlvm" value="Debug" onchange="update()"> Debug</label>
+  </div>
+  <div>
+    <span>LLVM Version:</span>
+      <label><input type="radio" name="LlvmVersion" value="19" onchange="update()"> 19</label>
+      <label><input type="radio" name="LlvmVersion" value="20" onchange="update()" checked> 20</label>
+  </div>
+  <div>
+    <span>Build Type Zig:</span>
+      <label><input type="radio" name="BuildTypeZig" value="Release" onchange="update()" checked> Release</label>
+      <label><input type="radio" name="BuildTypeZig" value="Debug" onchange="update()"> Debug</label>
+  </div>
+  <div>
+    <label>LLVM Directory: <input id="RootDirInput" type="text" oninput="update()" /></label>
+  </div>
+</div>
+
+<h2>Zig CMAKE</h2>
+
+After you've built LLVM with the instructions below, here are your cmake arguments to build Zig with it:
+
+<div id="ZigCmakeDiv"></div>
+
+<h2>Build LLVM (with lld and clang)</h2>
+<div id="LlvmInstructionsDiv"></div>
+</body>
+</html>
