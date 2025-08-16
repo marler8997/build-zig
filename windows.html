@@ -83,7 +83,7 @@ function generateHtmlLlvm(build_type, host_cpu, target_cpu, root_dir, cmake_vers
   html += generateHtmlCommand("mkdir " + root_dir);
 
   html += generateHtmlCommandSectionStart('Install msvcup (MSVC Build Tools Installer)');
-  html += generateHtmlCommand('curl -L -o ' + root_dir + '\\msvcup.zip https://github.com/marler8997/msvcup/releases/download/v2025_06_18/msvcup-' + msvcup_host_arch + '-windows.zip');
+  html += generateHtmlCommand('curl -L -o ' + root_dir + '\\msvcup.zip https://github.com/marler8997/msvcup/releases/download/v2025_08_15/msvcup-' + msvcup_host_arch + '-windows.zip');
   html += generateHtmlCommand('tar xf ' + root_dir + '\\msvcup.zip -C ' + root_dir);
   html += generateHtmlCommand('del ' + root_dir + '\\msvcup.zip');
   html += generateHtmlCommandSectionEnd();
