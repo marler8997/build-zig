@@ -122,7 +122,7 @@ function generateHtmlLlvm(build_type, host_os, host_cpu, target_cpu, root_dir, c
 
   html += generateHtmlCommandSectionStart('Download LLVM Project')
 
-  html += generateHtmlCommand('git clone --depth 1 --branch llvmorg-20.1.7 https://github.com/llvm/llvm-project.git ' + [root_dir, "src"].join(path_sep))
+  html += generateHtmlCommand('git clone --depth 1 --branch llvmorg-21.1.8 https://github.com/llvm/llvm-project.git ' + [root_dir, "src"].join(path_sep))
   html += generateHtmlCommandSectionEnd();
 
   html += generateHtmlCommandSectionStart('Build LLVM')
@@ -203,7 +203,7 @@ These are commands to build LLVM/Zig from any windows machine from scratch (no p
     <label><input type="radio" name="TargetCpu" value="arm" onchange="update()"> arm</label>
   </div>
   <div>
-    <label>LLVM Directory: <input id="RootDirInput" type="text" value="C:\llvm20" oninput="update()" /></label>
+    <label>LLVM Directory: <input id="RootDirInput" type="text" value="C:\llvm21" oninput="update()" /></label>
   </div>
 </div>
 
